@@ -46,11 +46,14 @@ export function renderOnboarding(container: HTMLElement): void {
       <label for="injuries">Травмы/ограничения (необязательно)</label>
       <input id="injuries" type="text" placeholder="например: колено, поясница" />
 
+      <p id="onboarding-error" style="color: var(--danger); display: none;"></p>
+
       <button type="submit" style="width: 100%; margin-top: 16px;">Сгенерировать программу</button>
     </form>
   `;
 
   const form = container.querySelector<HTMLFormElement>('#onboarding-form')!;
+  const errorEl = container.querySelector<HTMLParagraphElement>('#onboarding-error')!;
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -68,12 +71,15 @@ export function renderOnboarding(container: HTMLElement): void {
       injuries: value('injuries') || undefined,
     };
 
-    updateState('profile', profile);
-
-    const exercises = await loadExercises();
-    const program = generateInitialProgram(profile, exercises);
-    updateState('program', program);
-
-    window.location.hash = '#/home';
+    try {
+      const exercises = await loadExercises();
+      const program = generateInitialProgram(profile, exercises);
+      updateState('profile', profile);
+      updateState('program', program);
+      window.location.hash = '#/home';
+    } catch (error) {
+      errorEl.textContent = 'Не удалось сгенерировать программу. Проверь подключение и попробуй ещё раз.';
+      errorEl.style.display = 'block';
+    }
   });
 }
