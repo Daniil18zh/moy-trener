@@ -17,13 +17,27 @@ export function startRouter(
   container: HTMLElement,
   screens: Record<ScreenName, (container: HTMLElement) => void>,
 ): void {
+  let renderScheduled = false;
+
   function render(): void {
     const screen = resolveRoute(window.location.hash, getState());
     container.innerHTML = '';
     screens[screen](container);
   }
 
-  window.addEventListener('hashchange', render);
-  subscribe(render);
-  render();
+  function scheduleRender(): void {
+    if (!renderScheduled) {
+      renderScheduled = true;
+      queueMicrotask(() => {
+        renderScheduled = false;
+        render();
+      });
+    }
+  }
+
+  // Store unsubscribe to prevent listener leaks if startRouter is called multiple times
+  // (though in typical single-page app usage, it's only called once at startup)
+  void subscribe(scheduleRender);
+  window.addEventListener('hashchange', scheduleRender);
+  scheduleRender();
 }
