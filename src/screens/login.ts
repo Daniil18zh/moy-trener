@@ -1,4 +1,5 @@
 import { ensureDefaultAuth, verifyLogin } from '../auth';
+import { markAuthenticated } from '../sessionAuth';
 
 export function renderLogin(container: HTMLElement): void {
   void ensureDefaultAuth();
@@ -29,6 +30,7 @@ export function renderLogin(container: HTMLElement): void {
 
     if (await verifyLogin(login, password)) {
       errorEl.style.display = 'none';
+      markAuthenticated();
       window.location.hash = '#/home';
     } else {
       errorEl.style.display = 'block';

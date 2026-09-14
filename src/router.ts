@@ -1,12 +1,13 @@
 import type { AppState } from './types';
 import { getState, subscribe } from './state';
+import { isAuthenticated } from './sessionAuth';
 
 export type ScreenName = 'login' | 'onboarding' | 'home' | 'workout' | 'settings';
 
 const KNOWN_SCREENS: ScreenName[] = ['login', 'onboarding', 'home', 'workout', 'settings'];
 
-export function resolveRoute(hash: string, state: AppState): ScreenName {
-  if (!state.auth) return 'login';
+export function resolveRoute(hash: string, state: AppState, authenticated: boolean): ScreenName {
+  if (!authenticated) return 'login';
   if (!state.profile) return 'onboarding';
 
   const requested = hash.replace('#/', '') as ScreenName;
@@ -20,7 +21,7 @@ export function startRouter(
   let renderScheduled = false;
 
   function render(): void {
-    const screen = resolveRoute(window.location.hash, getState());
+    const screen = resolveRoute(window.location.hash, getState(), isAuthenticated());
     container.innerHTML = '';
     screens[screen](container);
   }
