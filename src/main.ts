@@ -1,3 +1,18 @@
 import './style.css';
+import { startRouter } from './router';
+import { renderLogin } from './screens/login';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = '<p>Мой тренер — сборка в процессе</p>';
+function placeholder(name: string) {
+  return (container: HTMLElement) => {
+    container.innerHTML = `<p>Экран "${name}" ещё не реализован</p>`;
+  };
+}
+
+const container = document.querySelector<HTMLDivElement>('#app')!;
+startRouter(container, {
+  login: renderLogin,
+  onboarding: placeholder('onboarding'),
+  home: placeholder('home'),
+  workout: placeholder('workout'),
+  settings: placeholder('settings'),
+});
