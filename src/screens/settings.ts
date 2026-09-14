@@ -10,6 +10,8 @@ export function renderSettings(container: HTMLElement): void {
   container.innerHTML = `
     <h1>Настройки</h1>
 
+    <button id="back-home" class="secondary" style="width: 100%;">На главную</button>
+
     <section>
       <h2>Смена логина/пароля</h2>
       <form id="credentials-form">
@@ -52,6 +54,12 @@ export function renderSettings(container: HTMLElement): void {
     statusEl.style.color = pendingImportStatus.color;
     pendingImportStatus = null;
   }
+
+  // Browser-back is awkward inside the Google Sites iframe this app is embedded in, so give the
+  // screen an explicit way out.
+  container.querySelector('#back-home')!.addEventListener('click', () => {
+    window.location.hash = '#/home';
+  });
 
   container.querySelector('#credentials-form')!.addEventListener('submit', async (event) => {
     event.preventDefault();

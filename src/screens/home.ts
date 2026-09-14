@@ -4,7 +4,18 @@ export function renderHome(container: HTMLElement): void {
   const { program, exerciseLog } = getState();
 
   if (!program) {
-    container.innerHTML = '<p>Программа не найдена. Пройди анкету заново в настройках.</p>';
+    // Do not point at a "redo the questionnaire" control in settings — there isn't one. This state
+    // is close to unreachable (the router sends a profile-less user to onboarding), so the honest
+    // minimum is to describe the problem and offer the backup path that does exist.
+    container.innerHTML = `
+      <h1>Мой тренер</h1>
+      <p>Программа тренировок не найдена — данные приложения повреждены или не сохранились.</p>
+      <p>Если у тебя есть резервная копия, восстанови её в настройках (раздел «Резервная копия»).</p>
+      <button id="open-settings" class="secondary" style="width: 100%;">Настройки</button>
+    `;
+    container.querySelector('#open-settings')!.addEventListener('click', () => {
+      window.location.hash = '#/settings';
+    });
     return;
   }
 
