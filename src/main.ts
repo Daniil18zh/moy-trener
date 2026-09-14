@@ -2,6 +2,7 @@ import './style.css';
 import { startRouter } from './router';
 import { renderLogin } from './screens/login';
 import { renderOnboarding } from './screens/onboarding';
+import { renderSettings } from './screens/settings';
 
 function placeholder(name: string) {
   return (container: HTMLElement) => {
@@ -15,5 +16,5 @@ startRouter(container, {
   onboarding: renderOnboarding,
   home: placeholder('home'),
   workout: placeholder('workout'),
-  settings: placeholder('settings'),
+  settings: renderSettings,
 });
