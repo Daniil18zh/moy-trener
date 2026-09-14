@@ -65,4 +65,79 @@ describe('advanceWeek', () => {
     expect(benchDay.targetWeightKg).toBeGreaterThan(40);
     expect(updated.estimatedOneRepMax['bench']).toBeGreaterThan(0);
   });
+
+  it('applies the identical, correctly-computed update to every day sharing the same exercise', () => {
+    const program = generateInitialProgram(profile, exercises);
+    // Fullbody at 3 days/week repeats the same template on every day, so 'bench' appears on
+    // all 3 days with identical starting data. Give it a real weight on every occurrence, as
+    // the workout screen would.
+    const daysWithBenchAt40 = program.days.map((d) => ({
+      ...d,
+      exercises: d.exercises.map((e) => (e.exerciseId === 'bench' ? { ...e, targetWeightKg: 40 } : e)),
+    }));
+    program.days = daysWithBenchAt40;
+    expect(program.days.filter((d) => d.exercises.some((e) => e.exerciseId === 'bench'))).toHaveLength(3);
+
+    // The user trains bench in all 3 sessions this week — one WorkoutLog per day.
+    const successfulSets = [
+      { planned: { weightKg: 40, reps: 6 }, actual: { weightKg: 40, reps: 8 }, done: true },
+      { planned: { weightKg: 40, reps: 6 }, actual: { weightKg: 40, reps: 8 }, done: true },
+      { planned: { weightKg: 40, reps: 6 }, actual: { weightKg: 40, reps: 8 }, done: true },
+    ];
+    const logs: WorkoutLog[] = [0, 1, 2].map((dayIndex) => ({
+      date: '2026-01-0' + (dayIndex + 1),
+      dayIndex,
+      exercises: [{ exerciseId: 'bench', sets: successfulSets }],
+      durationMin: 45,
+      totalTonnageKg: 960,
+    }));
+
+    const { program: updated } = advanceWeek(program, profile, logs);
+    const benchCopies = updated.days.map((d) => d.exercises.find((e) => e.exerciseId === 'bench')!);
+    expect(benchCopies).toHaveLength(3);
+    // Every day's copy of 'bench' must show the identical, single-step update — not one
+    // increase per day-occurrence.
+    for (const copy of benchCopies) {
+      expect(copy).toEqual(benchCopies[0]);
+    }
+    expect(benchCopies[0].targetWeightKg).toBeGreaterThan(40);
+    // A single successful week should not compound into repeated weight increases: at 5% per
+    // step, 3 compounded increases from 40 would exceed 46; one increase stays under it.
+    expect(benchCopies[0].targetWeightKg).toBeLessThan(46);
+  });
+
+  it('does not turn a single real failure into a two-consecutive-failure deload just because the exercise appears on multiple days', () => {
+    const program = generateInitialProgram(profile, exercises);
+    const daysWithBenchAt40 = program.days.map((d) => ({
+      ...d,
+      exercises: d.exercises.map((e) => (e.exerciseId === 'bench' ? { ...e, targetWeightKg: 40 } : e)),
+    }));
+    program.days = daysWithBenchAt40;
+    expect(program.days.filter((d) => d.exercises.some((e) => e.exerciseId === 'bench'))).toHaveLength(3);
+
+    // A single real failure this week: reps fall short of repsMin (6) on every set, logged once
+    // per session across the week's 3 fullbody days (as the workout screen would log it).
+    const failedSets = [
+      { planned: { weightKg: 40, reps: 6 }, actual: { weightKg: 40, reps: 4 }, done: true },
+      { planned: { weightKg: 40, reps: 6 }, actual: { weightKg: 40, reps: 4 }, done: true },
+      { planned: { weightKg: 40, reps: 6 }, actual: { weightKg: 40, reps: 4 }, done: true },
+    ];
+    const logs: WorkoutLog[] = [0, 1, 2].map((dayIndex) => ({
+      date: '2026-01-0' + (dayIndex + 1),
+      dayIndex,
+      exercises: [{ exerciseId: 'bench', sets: failedSets }],
+      durationMin: 45,
+      totalTonnageKg: 480,
+    }));
+
+    const { program: updated } = advanceWeek(program, profile, logs);
+    // One real failure recorded, not a two-in-a-row deload.
+    expect(updated.progressByExercise['bench'].consecutiveFailures).toBe(1);
+    const benchCopies = updated.days.map((d) => d.exercises.find((e) => e.exerciseId === 'bench')!);
+    for (const copy of benchCopies) {
+      expect(copy).toEqual(benchCopies[0]);
+    }
+    // No deload should have fired — weight must be unchanged.
+    expect(benchCopies[0].targetWeightKg).toBe(40);
+  });
 });
