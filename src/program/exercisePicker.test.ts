@@ -28,7 +28,7 @@ describe('pickExercisesForDay', () => {
     const result = pickExercisesForDay(pool, {
       targetMuscles: ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'],
       equipment: 'full_gym',
-      timeBudgetMin: 90,
+      timeBudgetMin: 120,
       goal: 'mass',
       experience: 'beginner',
     });

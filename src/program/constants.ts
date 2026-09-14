@@ -24,7 +24,7 @@ export interface RepScheme {
 // distinguishes them further).
 export const REP_SCHEME_BY_GOAL: Record<Goal, RepScheme> = {
   strength: { setsMin: 3, setsMax: 5, repsMin: 3, repsMax: 6 },
-  mass: { setsMin: 2, setsMax: 4, repsMin: 6, repsMax: 12 },
+  mass: { setsMin: 3, setsMax: 4, repsMin: 6, repsMax: 12 },
   fitness: { setsMin: 3, setsMax: 4, repsMin: 8, repsMax: 12 },
   fatloss: { setsMin: 2, setsMax: 3, repsMin: 12, repsMax: 20 },
   maintenance: { setsMin: 3, setsMax: 4, repsMin: 8, repsMax: 12 },
