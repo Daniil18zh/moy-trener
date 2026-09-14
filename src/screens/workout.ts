@@ -108,7 +108,7 @@ export function renderWorkout(container: HTMLElement): void {
       wrapper.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start;">
           <h3 style="margin: 0;">${exercise?.nameRu ?? ex.exerciseId}</h3>
-          <button class="replace-btn secondary" style="font-size: 0.8rem; padding: 4px 8px; min-height: 32px;">Заменить</button>
+          <button class="replace-btn secondary" style="font-size: 0.8rem; padding: 4px 8px; min-height: 44px; min-width: 44px;">Заменить</button>
         </div>
         ${exercise?.images[0] ? `<img src="/exercises/${exercise.id}/${exercise.images[0].split('/').pop()}" alt="${exercise.nameRu}" style="max-width: 100%; border-radius: 8px;" />` : ''}
         <p>${ex.sets} × ${ex.repsMin}-${ex.repsMax} ${ex.targetWeightKg !== null ? `@ ${ex.targetWeightKg} кг` : '(вес тела)'}</p>

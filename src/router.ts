@@ -1,6 +1,6 @@
 import type { AppState } from './types';
 import { getState, subscribe } from './state';
-import { isAuthenticated } from './sessionAuth';
+import { isAuthenticated, subscribeAuth } from './sessionAuth';
 
 export type ScreenName = 'login' | 'onboarding' | 'home' | 'workout' | 'settings';
 
@@ -39,6 +39,7 @@ export function startRouter(
   // Store unsubscribe to prevent listener leaks if startRouter is called multiple times
   // (though in typical single-page app usage, it's only called once at startup)
   void subscribe(scheduleRender);
+  void subscribeAuth(scheduleRender);
   window.addEventListener('hashchange', scheduleRender);
   scheduleRender();
 }
