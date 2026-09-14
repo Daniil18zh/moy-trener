@@ -2,6 +2,7 @@ import './style.css';
 import { startRouter } from './router';
 import { renderLogin } from './screens/login';
 import { renderOnboarding } from './screens/onboarding';
+import { renderHome } from './screens/home';
 import { renderSettings } from './screens/settings';
 
 function placeholder(name: string) {
@@ -14,7 +15,7 @@ const container = document.querySelector<HTMLDivElement>('#app')!;
 startRouter(container, {
   login: renderLogin,
   onboarding: renderOnboarding,
-  home: placeholder('home'),
+  home: renderHome,
   workout: placeholder('workout'),
   settings: renderSettings,
 });
