@@ -2133,7 +2133,7 @@ startRouter(container, {
   onboarding: renderOnboarding,
   home: placeholder('home'),
   workout: placeholder('workout'),
-  settings: renderSettings,
+  settings: placeholder('settings'),
 });
 ```
 
