@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest';
+import { mapMuscleGroup, mapEquipmentTiers, mapMechanic, isUsableCategory, normalizeExercise } from './exerciseMapping';
+
+describe('exerciseMapping', () => {
+  it('maps muscle names to our 6 groups, and neck to null', () => {
+    expect(mapMuscleGroup('lats')).toBe('back');
+    expect(mapMuscleGroup('quadriceps')).toBe('legs');
+    expect(mapMuscleGroup('abdominals')).toBe('core');
+    expect(mapMuscleGroup('neck')).toBeNull();
+  });
+
+  it('maps raw equipment to our 3 tiers', () => {
+    expect(mapEquipmentTiers('body only')).toEqual(['bodyweight', 'home_dumbbells', 'full_gym']);
+    expect(mapEquipmentTiers('dumbbell')).toEqual(['home_dumbbells', 'full_gym']);
+    expect(mapEquipmentTiers('barbell')).toEqual(['full_gym']);
+    expect(mapEquipmentTiers(null)).toEqual([]);
+    expect(mapEquipmentTiers('other')).toEqual([]);
+  });
+
+  it('maps mechanic, defaulting null to isolation', () => {
+    expect(mapMechanic('compound')).toBe('compound');
+    expect(mapMechanic('isolation')).toBe('isolation');
+    expect(mapMechanic(null)).toBe('isolation');
+  });
+
+  it('accepts strength/powerlifting/olympic weightlifting categories only', () => {
+    expect(isUsableCategory('strength')).toBe(true);
+    expect(isUsableCategory('powerlifting')).toBe(true);
+    expect(isUsableCategory('olympic weightlifting')).toBe(true);
+    expect(isUsableCategory('cardio')).toBe(false);
+    expect(isUsableCategory('stretching')).toBe(false);
+    expect(isUsableCategory('plyometrics')).toBe(false);
+    expect(isUsableCategory('strongman')).toBe(false);
+  });
+
+  it('normalizes a real dataset entry, applying the Russian dictionary', () => {
+    const raw = {
+      id: '3_4_Sit-Up',
+      name: '3/4 Sit-Up',
+      force: 'pull',
+      level: 'beginner' as const,
+      mechanic: null,
+      equipment: 'body only',
+      primaryMuscles: ['abdominals'],
+      secondaryMuscles: [],
+      instructions: ['Lie down.', 'Sit up.'],
+      category: 'strength',
+      images: ['3_4_Sit-Up/0.jpg', '3_4_Sit-Up/1.jpg'],
+    };
+    const result = normalizeExercise(raw, { '3_4_Sit-Up': 'Скручивания на 3/4' });
+    expect(result).toEqual({
+      id: '3_4_Sit-Up',
+      nameRu: 'Скручивания на 3/4',
+      nameEn: '3/4 Sit-Up',
+      muscleGroup: 'core',
+      secondaryMuscleGroups: [],
+      equipmentTiers: ['bodyweight', 'home_dumbbells', 'full_gym'],
+      mechanic: 'isolation',
+      level: 'beginner',
+      instructions: ['Lie down.', 'Sit up.'],
+      images: ['3_4_Sit-Up/0.jpg', '3_4_Sit-Up/1.jpg'],
+    });
+  });
+
+  it('falls back to the English name when no translation exists', () => {
+    const raw = {
+      id: 'Some_Exercise', name: 'Some Exercise', force: null, level: 'beginner' as const,
+      mechanic: 'compound', equipment: 'barbell', primaryMuscles: ['chest'], secondaryMuscles: [],
+      instructions: ['Do it.'], category: 'strength', images: [],
+    };
+    expect(normalizeExercise(raw, {})?.nameRu).toBe('Some Exercise');
+  });
+
+  it('returns null for unusable categories or unmappable primary muscle', () => {
+    const cardio = { id: 'x', name: 'X', force: null, level: 'beginner' as const, mechanic: null, equipment: 'body only', primaryMuscles: ['abdominals'], secondaryMuscles: [], instructions: [], category: 'cardio', images: [] };
+    expect(normalizeExercise(cardio, {})).toBeNull();
+
+    const neck = { id: 'y', name: 'Y', force: null, level: 'beginner' as const, mechanic: null, equipment: 'body only', primaryMuscles: ['neck'], secondaryMuscles: [], instructions: [], category: 'strength', images: [] };
+    expect(normalizeExercise(neck, {})).toBeNull();
+
+    const noEquipmentTier = { id: 'z', name: 'Z', force: null, level: 'beginner' as const, mechanic: null, equipment: 'other', primaryMuscles: ['chest'], secondaryMuscles: [], instructions: [], category: 'strength', images: [] };
+    expect(normalizeExercise(noEquipmentTier, {})).toBeNull();
+  });
+});
