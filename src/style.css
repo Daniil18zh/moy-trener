@@ -6,6 +6,7 @@
   --accent: #2563eb;
   --danger: #dc2626;
   --border: #d4d4d8;
+  --muted: #5c5c66;
 }
 
 * { box-sizing: border-box; }
@@ -48,3 +49,24 @@ input, select {
 }
 
 label { display: block; margin: 12px 0 4px; font-weight: 600; }
+
+/* Secondary text on an exercise card: the coach's instructions and the explanation of why this
+   week's prescription changed. Deliberately quieter than the exercise name and image. */
+.exercise-instructions,
+.exercise-change-reason {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.exercise-change-reason { font-style: italic; }
+
+.storage-warning {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: var(--danger);
+  border-bottom: 1px solid var(--border);
+}

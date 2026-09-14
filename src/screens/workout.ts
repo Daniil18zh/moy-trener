@@ -30,6 +30,24 @@ let sessionRestCountdown: Countdown | null = null;
 // takes (e.g. through loadExercises().then(...)).
 let pendingSummary: { durationMin: number; totalTonnageKg: number } | null = null;
 
+// Exercise names and instructions come from the bundled data file rather than from the user, but
+// they are free text containing quotes and punctuation and they land in both attribute and element
+// positions — escape them so a stray character can't break the surrounding markup.
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Static assets (the exercise images) live under Vite's configured base, which is "/" in dev but
+// "/<repo>/" on GitHub Pages — a hardcoded root-absolute path would 404 there.
+function assetUrl(path: string): string {
+  return `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
+}
+
 function renderSummary(container: HTMLElement, summary: { durationMin: number; totalTonnageKg: number }): void {
   container.innerHTML = `
     <h1>Тренировка завершена</h1>
@@ -88,6 +106,12 @@ export function renderWorkout(container: HTMLElement): void {
   }
 
   function renderScreen(byId: Map<string, Exercise>): void {
+    // A fresh render detaches every node the running rest countdown was writing into (including
+    // the timer readout it hides itself with), so an orphaned countdown could only ever beep
+    // invisibly. Stop it here; the next completed set starts a clean one via startRest().
+    sessionRestCountdown?.stop();
+    sessionRestCountdown = null;
+
     container.innerHTML = `
       <h1>Тренировка</h1>
       <p id="session-timer">Прошло: 0 мин</p>
@@ -105,13 +129,22 @@ export function renderWorkout(container: HTMLElement): void {
       const exercise = byId.get(ex.exerciseId);
       const wrapper = document.createElement('section');
       wrapper.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px;';
+      const exerciseName = escapeHtml(exercise?.nameRu ?? ex.exerciseId);
+      const imageUrl = exercise?.images[0]
+        ? assetUrl(`exercises/${exercise.id}/${exercise.images[0].split('/').pop()}`)
+        : null;
+      // Spec §10: every exercise on the workout screen shows both an image and an instruction.
+      const instructions = exercise?.instructions?.length ? escapeHtml(exercise.instructions.join(' ')) : '';
+
       wrapper.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start;">
-          <h3 style="margin: 0;">${exercise?.nameRu ?? ex.exerciseId}</h3>
+          <h3 style="margin: 0;">${exerciseName}</h3>
           <button class="replace-btn secondary" style="font-size: 0.8rem; padding: 4px 8px; min-height: 44px; min-width: 44px;">Заменить</button>
         </div>
-        ${exercise?.images[0] ? `<img src="/exercises/${exercise.id}/${exercise.images[0].split('/').pop()}" alt="${exercise.nameRu}" style="max-width: 100%; border-radius: 8px;" />` : ''}
+        ${imageUrl ? `<img src="${imageUrl}" alt="${exerciseName}" style="max-width: 100%; border-radius: 8px;" />` : ''}
         <p>${ex.sets} × ${ex.repsMin}-${ex.repsMax} ${ex.targetWeightKg !== null ? `@ ${ex.targetWeightKg} кг` : '(вес тела)'}</p>
+        ${ex.lastChangeReason ? `<p class="exercise-change-reason">${escapeHtml(ex.lastChangeReason)}</p>` : ''}
+        ${instructions ? `<p class="exercise-instructions">${instructions}</p>` : ''}
         <div class="set-rows"></div>
       `;
 
@@ -137,11 +170,26 @@ export function renderWorkout(container: HTMLElement): void {
       for (let setIndex = 0; setIndex < ex.sets; setIndex++) {
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-bottom: 8px;';
+
+        // A remount can happen mid-workout (replacing a different exercise re-renders the whole
+        // screen) without clearing sessionLogs, so a set already marked done must come back as
+        // done — otherwise the UI invites the user to log it a second time.
+        const logged = logs.get(`${ex.exerciseId}:${setIndex}`);
+        const weightValue = logged ? (logged.actual.weightKg ?? '') : (ex.targetWeightKg ?? '');
+        const repsValue = logged ? logged.actual.reps : ex.repsMin;
+        const disabled = logged ? 'disabled' : '';
+
         row.innerHTML = `
-          <input class="actual-weight" type="number" value="${ex.targetWeightKg ?? ''}" placeholder="кг" style="width: 80px;" />
-          <input class="actual-reps" type="number" value="${ex.repsMin}" placeholder="повторы" style="width: 80px;" />
-          <button class="done-btn secondary">Готово ✓</button>
+          <input class="actual-weight" type="number" value="${weightValue}" placeholder="кг" style="width: 80px;" ${disabled} />
+          <input class="actual-reps" type="number" value="${repsValue}" placeholder="повторы" style="width: 80px;" ${disabled} />
+          <button class="done-btn secondary" ${disabled}>${logged ? 'Выполнено' : 'Готово ✓'}</button>
         `;
+
+        if (logged) {
+          setRows.appendChild(row);
+          continue;
+        }
+
         const doneBtn = row.querySelector<HTMLButtonElement>('.done-btn')!;
         doneBtn.addEventListener('click', () => {
           const weightInput = row.querySelector<HTMLInputElement>('.actual-weight')!;
@@ -153,6 +201,8 @@ export function renderWorkout(container: HTMLElement): void {
           });
           doneBtn.textContent = 'Выполнено';
           doneBtn.disabled = true;
+          weightInput.disabled = true;
+          repsInput.disabled = true;
           startRest(ex.restSec);
         });
         setRows.appendChild(row);
@@ -166,6 +216,12 @@ export function renderWorkout(container: HTMLElement): void {
       const elapsedMin = Math.floor((Date.now() - startedAt) / 60000);
       sessionTimerEl.textContent = `Прошло: ${elapsedMin} мин`;
     }, 15000);
+
+    // Bound exactly ONCE per render, against whatever countdown is current at click time. Binding
+    // these inside startRest() instead would stack one listener per completed set, so after N sets
+    // a single tap of "+15 сек" would add 15 × N seconds.
+    container.querySelector('#rest-minus')!.addEventListener('click', () => sessionRestCountdown?.addSeconds(-15));
+    container.querySelector('#rest-plus')!.addEventListener('click', () => sessionRestCountdown?.addSeconds(15));
 
     container.querySelector('#finish-workout')!.addEventListener('click', () => finishWorkout());
   }
@@ -182,9 +238,6 @@ export function renderWorkout(container: HTMLElement): void {
       (remaining) => { remainingEl.textContent = String(remaining); },
       () => { playBeep(); restEl.style.display = 'none'; },
     );
-
-    container.querySelector('#rest-minus')!.addEventListener('click', () => sessionRestCountdown?.addSeconds(-15));
-    container.querySelector('#rest-plus')!.addEventListener('click', () => sessionRestCountdown?.addSeconds(15));
   }
 
   function finishWorkout(): void {
