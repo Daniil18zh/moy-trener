@@ -44,7 +44,7 @@ describe('applyProgression', () => {
 
   it('deloads by 10% after two consecutive failures', () => {
     const result = applyProgression(makeExercise(), setsAt(4, 3), 'linear', 1, 0, 1);
-    expect(result.exercise.targetWeightKg).toBeCloseTo(60 * 0.9, 1);
+    expect(result.exercise.targetWeightKg).toBeCloseTo(53.75, 1);
     expect(result.consecutiveFailures).toBe(0);
     expect(result.reason).toMatch(/делоад/);
   });

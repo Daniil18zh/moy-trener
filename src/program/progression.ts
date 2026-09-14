@@ -81,7 +81,7 @@ export function applyProgression(
     if (newFailures >= 2) {
       const reason = 'Два срыва подряд — вес снижен для стабилизации техники (делоад)';
       return {
-        exercise: { ...exercise, targetWeightKg: exercise.targetWeightKg * (1 - WEIGHT_DECREASE_PCT), lastChangeReason: reason },
+        exercise: { ...exercise, targetWeightKg: roundToPlate(exercise.targetWeightKg * (1 - WEIGHT_DECREASE_PCT)), lastChangeReason: reason },
         phase: 'linear', consecutiveFailures: 0, weeksWithoutIncrease: weeksWithoutIncrease + 1, reason,
       };
     }
