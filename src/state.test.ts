@@ -32,4 +32,15 @@ describe('state', () => {
   it('reports storage availability', () => {
     expect(isStorageAvailable()).toBe(true);
   });
+
+  it('reports storage as unavailable when localStorage throws (private mode, partitioned iframe)', () => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => { throw new DOMException('denied', 'SecurityError'); };
+    try {
+      expect(isStorageAvailable()).toBe(false);
+    } finally {
+      Storage.prototype.setItem = original;
+    }
+    expect(isStorageAvailable()).toBe(true);
+  });
 });
