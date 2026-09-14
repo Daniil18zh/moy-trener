@@ -4,15 +4,30 @@ import { loadExercises } from '../exercises/loader';
 import { advanceWeek } from '../program/generator';
 import { createCountdown, playBeep, type Countdown } from '../timer';
 
+// Module-level session state, deliberately kept OUTSIDE renderWorkout(). The router
+// (src/router.ts) subscribes to state changes and reactively re-invokes renderWorkout() for the
+// current hash whenever updateState() fires — and several actions on this screen (finishing the
+// workout, replacing an exercise) call updateState() while still on "#/workout". Each such call
+// spawns a brand-new renderWorkout() closure. If the in-progress set logs, session start time, the
+// session-timer interval, and the active rest countdown lived only as local variables inside that
+// closure, a reactive remount would silently reset all of them: already-marked "Готово" sets would
+// vanish from the eventual WorkoutLog, the elapsed-time clock would restart, a new session-timer
+// interval would stack on top of any previous one (never cleared), and any rest countdown from the
+// old closure would keep ticking against detached DOM nodes (still audible via playBeep(), just
+// invisible). Hoisting this state to module scope means every renderWorkout() invocation for the
+// same in-progress session reads and writes the *same* underlying state, so a reactive remount is
+// transparent — it only gets reset once the workout actually finishes (see finishWorkout()).
+let sessionLogs: Map<string, SetLogEntry> = new Map();
+let sessionStartedAt: number | null = null;
+let sessionTimerIntervalId: ReturnType<typeof setInterval> | null = null;
+let sessionRestCountdown: Countdown | null = null;
+
 // Set by finishWorkout() right before it persists state, consumed by the very next call to
-// renderWorkout(). This exists because the router (src/router.ts) subscribes to state changes
-// and reactively re-invokes renderWorkout() for the *current* hash whenever updateState() fires
-// — including the updateState() calls finishWorkout() itself makes to persist the log. Without
-// this guard, that reactive re-render would replace the just-computed summary with a fresh
-// render of the *next* day's workout before the user ever sees the summary (confirmed via manual
-// testing: the summary flashed and was immediately overwritten). Checking this flag at the top of
-// renderWorkout, before any other work, guarantees the summary wins regardless of how many
-// microtask hops the reactive re-render takes (e.g. through loadExercises().then(...)).
+// renderWorkout(). This exists because the same reactive-remount mechanism described above would
+// otherwise replace the just-finished summary with a fresh render of the *next* day's workout
+// before the user ever saw it. Checking this flag at the top of renderWorkout, before any other
+// work, guarantees the summary wins regardless of how many microtask hops the reactive re-render
+// takes (e.g. through loadExercises().then(...)).
 let pendingSummary: { durationMin: number; totalTonnageKg: number } | null = null;
 
 function renderSummary(container: HTMLElement, summary: { durationMin: number; totalTonnageKg: number }): void {
@@ -40,11 +55,18 @@ export function renderWorkout(container: HTMLElement): void {
 
   const dayIndex = exerciseLog.length % program.days.length;
   const day = program.days[dayIndex];
-  const startedAt = Date.now();
 
+  // Only start a fresh session (start time + set logs) the first time we render for this
+  // workout; a reactive remount mid-session (e.g. triggered by "Заменить") must reuse the same
+  // session state rather than resetting it. finishWorkout() sets sessionStartedAt back to null
+  // once the workout is actually over, so the *next* workout correctly starts a new session.
+  if (sessionStartedAt === null) {
+    sessionStartedAt = Date.now();
+    sessionLogs = new Map();
+  }
+  const startedAt = sessionStartedAt;
   // Working copy of set logs, keyed by "exerciseId:setIndex"
-  const logs = new Map<string, SetLogEntry>();
-  let restCountdown: Countdown | null = null;
+  const logs = sessionLogs;
   let allExercisesCache: Exercise[] = [];
 
   loadExercises().then((allExercises) => {
@@ -139,7 +161,8 @@ export function renderWorkout(container: HTMLElement): void {
     }
 
     const sessionTimerEl = container.querySelector<HTMLParagraphElement>('#session-timer')!;
-    setInterval(() => {
+    if (sessionTimerIntervalId !== null) clearInterval(sessionTimerIntervalId);
+    sessionTimerIntervalId = setInterval(() => {
       const elapsedMin = Math.floor((Date.now() - startedAt) / 60000);
       sessionTimerEl.textContent = `Прошло: ${elapsedMin} мин`;
     }, 15000);
@@ -148,20 +171,20 @@ export function renderWorkout(container: HTMLElement): void {
   }
 
   function startRest(restSec: number): void {
-    restCountdown?.stop();
+    sessionRestCountdown?.stop();
     const restEl = container.querySelector<HTMLDivElement>('#rest-timer')!;
     const remainingEl = container.querySelector<HTMLSpanElement>('#rest-remaining')!;
     restEl.style.display = 'block';
     remainingEl.textContent = String(restSec);
 
-    restCountdown = createCountdown(
+    sessionRestCountdown = createCountdown(
       restSec,
       (remaining) => { remainingEl.textContent = String(remaining); },
       () => { playBeep(); restEl.style.display = 'none'; },
     );
 
-    container.querySelector('#rest-minus')!.addEventListener('click', () => restCountdown?.addSeconds(-15));
-    container.querySelector('#rest-plus')!.addEventListener('click', () => restCountdown?.addSeconds(15));
+    container.querySelector('#rest-minus')!.addEventListener('click', () => sessionRestCountdown?.addSeconds(-15));
+    container.querySelector('#rest-plus')!.addEventListener('click', () => sessionRestCountdown?.addSeconds(15));
   }
 
   function finishWorkout(): void {
@@ -182,6 +205,17 @@ export function renderWorkout(container: HTMLElement): void {
     const log: WorkoutLog = { date: new Date().toISOString(), dayIndex, exercises: exercisesLog, durationMin, totalTonnageKg };
     const { exerciseLog: currentLog, program: currentProgram, profile } = getState();
 
+    // Reset session state so the *next* workout starts fresh, and stop any still-running rest
+    // countdown so it can't fire playBeep() against a now-irrelevant session.
+    sessionStartedAt = null;
+    sessionLogs = new Map();
+    if (sessionTimerIntervalId !== null) {
+      clearInterval(sessionTimerIntervalId);
+      sessionTimerIntervalId = null;
+    }
+    sessionRestCountdown?.stop();
+    sessionRestCountdown = null;
+
     // Set before updateState() so the reactive re-render it triggers (see the comment on
     // pendingSummary above) shows this summary instead of starting the next day.
     pendingSummary = { durationMin, totalTonnageKg };
@@ -199,6 +233,9 @@ export function renderWorkout(container: HTMLElement): void {
       }
     }
 
-    renderSummary(container, { durationMin, totalTonnageKg });
+    // No direct renderSummary() call here: the updateState() call above always triggers the
+    // router's reactive re-render (it subscribes to every state change), which will invoke
+    // renderWorkout() again and immediately hit the pendingSummary guard at the top of this
+    // function — that's what actually paints the summary.
   }
 }
