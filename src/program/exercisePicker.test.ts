@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest';
+import { pickExercisesForDay } from './exercisePicker';
+import type { Exercise } from '../types';
+
+function makeExercise(overrides: Partial<Exercise>): Exercise {
+  return {
+    id: 'x', nameRu: 'X', nameEn: 'X', muscleGroup: 'chest', secondaryMuscleGroups: [],
+    equipmentTiers: ['full_gym'], mechanic: 'compound', level: 'beginner',
+    instructions: [], images: [], ...overrides,
+  };
+}
+
+const pool: Exercise[] = [
+  makeExercise({ id: 'bench', muscleGroup: 'chest', mechanic: 'compound' }),
+  makeExercise({ id: 'flye', muscleGroup: 'chest', mechanic: 'isolation' }),
+  makeExercise({ id: 'row', muscleGroup: 'back', mechanic: 'compound' }),
+  makeExercise({ id: 'pulldown', muscleGroup: 'back', mechanic: 'isolation' }),
+  makeExercise({ id: 'squat', muscleGroup: 'legs', mechanic: 'compound' }),
+  makeExercise({ id: 'legext', muscleGroup: 'legs', mechanic: 'isolation' }),
+  makeExercise({ id: 'ohp', muscleGroup: 'shoulders', mechanic: 'compound' }),
+  makeExercise({ id: 'raise', muscleGroup: 'shoulders', mechanic: 'isolation' }),
+  makeExercise({ id: 'curl', muscleGroup: 'arms', mechanic: 'isolation' }),
+  makeExercise({ id: 'crunch', muscleGroup: 'core', mechanic: 'isolation' }),
+];
+
+describe('pickExercisesForDay', () => {
+  it('covers every target muscle group at least once when time allows', () => {
+    const result = pickExercisesForDay(pool, {
+      targetMuscles: ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'],
+      equipment: 'full_gym',
+      timeBudgetMin: 90,
+      goal: 'mass',
+      experience: 'beginner',
+    });
+    const coveredMuscles = new Set(result.map((r) => pool.find((e) => e.id === r.exerciseId)?.muscleGroup));
+    expect(coveredMuscles).toEqual(new Set(['chest', 'back', 'legs', 'shoulders', 'arms', 'core']));
+  });
+
+  it('never exceeds the time budget', () => {
+    const result = pickExercisesForDay(pool, {
+      targetMuscles: ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'],
+      equipment: 'full_gym',
+      timeBudgetMin: 30,
+      goal: 'mass',
+      experience: 'beginner',
+    });
+    const totalMin = result.reduce((sum, ex) => {
+      const restSec = 90; // mass
+      return sum + (ex.sets * (45 + restSec) + 90) / 60;
+    }, 0);
+    expect(totalMin).toBeLessThanOrEqual(30);
+  });
+
+  it('gives compound exercises more sets than isolation for the same goal', () => {
+    const result = pickExercisesForDay(pool, {
+      targetMuscles: ['chest'],
+      equipment: 'full_gym',
+      timeBudgetMin: 90,
+      goal: 'mass',
+      experience: 'beginner',
+    });
+    const bench = result.find((r) => r.exerciseId === 'bench');
+    const flye = result.find((r) => r.exerciseId === 'flye');
+    expect(bench!.sets).toBeGreaterThan(flye!.sets);
+  });
+
+  it('never picks the same exercise twice in one day', () => {
+    const result = pickExercisesForDay(pool, {
+      targetMuscles: ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'],
+      equipment: 'full_gym',
+      timeBudgetMin: 120,
+      goal: 'mass',
+      experience: 'advanced',
+    });
+    const ids = result.map((r) => r.exerciseId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
