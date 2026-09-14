@@ -58,6 +58,12 @@ export interface ExerciseProgress {
   phase: ProgressionPhase;
   consecutiveFailures: number;
   weeksWithoutIncrease: number;
+  // Baseline captured when a scheduled deload week (isDeloadWeek) temporarily cut volume/weight,
+  // consumed and cleared by the very next non-deload week so the dip is restored instead of
+  // becoming the new permanent baseline. null whenever no deload is pending restoration.
+  // preDeloadWeightKg stays null for true bodyweight exercises even during a deload.
+  preDeloadSets: number | null;
+  preDeloadWeightKg: number | null;
 }
 
 export interface Program {

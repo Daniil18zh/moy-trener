@@ -70,6 +70,31 @@ describe('applyProgression', () => {
     expect(result.reason).toMatch(/разгрузочная/i);
   });
 
+  it('reports the pre-deload baseline so it can be restored afterwards', () => {
+    const result = applyProgression(makeExercise(), setsAt(12, 3), 'linear', 0, 0, 6);
+    expect(result.preDeloadSets).toBe(3);
+    expect(result.preDeloadWeightKg).toBe(60);
+  });
+
+  it('restores the pre-deload baseline on the week after a deload, then progresses from it', () => {
+    // Prescription the user just trained on is the deloaded one (2 sets @ 33.75 kg), and the saved
+    // baseline says the real working prescription was 3 sets @ 60 kg.
+    const deloaded = makeExercise({ sets: 2, targetWeightKg: 33.75 });
+    const result = applyProgression(deloaded, setsAt(12, 2), 'linear', 0, 0, 7, 3, 60);
+
+    expect(result.exercise.sets).toBe(3);
+    expect(result.exercise.targetWeightKg).toBeGreaterThan(60); // restored to 60, then +5%
+    // Baseline consumed — it must not be restored a second time next week.
+    expect(result.preDeloadSets).toBeNull();
+    expect(result.preDeloadWeightKg).toBeNull();
+  });
+
+  it('does not restore anything when no deload is pending', () => {
+    const result = applyProgression(makeExercise(), setsAt(12, 3), 'linear', 0, 0, 7);
+    expect(result.exercise.sets).toBe(3);
+    expect(result.preDeloadSets).toBeNull();
+  });
+
   it('progresses bodyweight exercises (null weight) via reps instead of weight', () => {
     const bodyweightExercise = makeExercise({ targetWeightKg: null });
     const maxed = applyProgression(bodyweightExercise, setsAt(12, 3), 'linear', 0, 0, 1);

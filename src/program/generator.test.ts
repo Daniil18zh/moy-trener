@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateInitialProgram, advanceWeek } from './generator';
-import type { Exercise, Profile, WorkoutLog } from '../types';
+import type { Exercise, Profile, Program, WorkoutLog } from '../types';
 
 function makeExercise(overrides: Partial<Exercise>): Exercise {
   return {
@@ -36,7 +36,10 @@ describe('generateInitialProgram', () => {
     const program = generateInitialProgram(profile, exercises);
     const allExerciseIds = program.days.flatMap((d) => d.exercises.map((e) => e.exerciseId));
     for (const id of allExerciseIds) {
-      expect(program.progressByExercise[id]).toEqual({ phase: 'linear', consecutiveFailures: 0, weeksWithoutIncrease: 0 });
+      expect(program.progressByExercise[id]).toEqual({
+        phase: 'linear', consecutiveFailures: 0, weeksWithoutIncrease: 0,
+        preDeloadSets: null, preDeloadWeightKg: null,
+      });
     }
   });
 });
@@ -139,5 +142,118 @@ describe('advanceWeek', () => {
     }
     // No deload should have fired — weight must be unchanged.
     expect(benchCopies[0].targetWeightKg).toBe(40);
+  });
+});
+
+// Simulates a fully successful training week: every prescribed set of every exercise on every day
+// completed at the prescribed weight and at the top of the rep range. `firstWeightById` supplies the
+// weight the user types in for an exercise that has no target weight yet (i.e. week 1); an exercise
+// absent from that map is logged with no weight at all, which is what a pure bodyweight exercise
+// looks like in the log.
+function simulateSuccessfulWeek(program: Program, firstWeightById: Record<string, number>): WorkoutLog[] {
+  return program.days.map((day, dayIndex) => ({
+    date: `2026-01-${String(dayIndex + 1).padStart(2, '0')}`,
+    dayIndex,
+    exercises: day.exercises.map((ex) => ({
+      exerciseId: ex.exerciseId,
+      sets: Array.from({ length: ex.sets }, () => ({
+        planned: { weightKg: ex.targetWeightKg, reps: ex.repsMax },
+        actual: { weightKg: ex.targetWeightKg ?? firstWeightById[ex.exerciseId] ?? null, reps: ex.repsMax },
+        done: true,
+      })),
+    })),
+    durationMin: 45,
+    totalTonnageKg: 0,
+  }));
+}
+
+function benchOf(program: Program) {
+  return program.days[0].exercises.find((e) => e.exerciseId === 'bench')!;
+}
+
+describe('advanceWeek — establishing a real working weight (regression)', () => {
+  it('seeds targetWeightKg from the weight the user actually logged, then grows it week over week', () => {
+    let program = generateInitialProgram(profile, exercises);
+    // Everything starts with no established weight — that is all pickExercisesForDay can produce.
+    expect(benchOf(program).targetWeightKg).toBeNull();
+
+    // Week 1: the user enters a real 40 kg on every bench set.
+    program = advanceWeek(program, profile, simulateSuccessfulWeek(program, { bench: 40 })).program;
+
+    const afterWeek1 = benchOf(program).targetWeightKg;
+    expect(afterWeek1).not.toBeNull();
+    expect(typeof afterWeek1).toBe('number');
+    // Seeded from the logged 40 kg and already progressed once for the successful week.
+    expect(afterWeek1!).toBeGreaterThan(40);
+
+    // Weeks 2 and 3: the user keeps hitting the prescription at whatever weight is prescribed.
+    const weights = [afterWeek1!];
+    for (let i = 0; i < 2; i++) {
+      program = advanceWeek(program, profile, simulateSuccessfulWeek(program, {})).program;
+      weights.push(benchOf(program).targetWeightKg!);
+    }
+
+    // Load genuinely grows, and the rep range stays inside the intended hypertrophy window
+    // instead of ratcheting upward forever via the bodyweight branch.
+    expect(weights[1]).toBeGreaterThan(weights[0]);
+    expect(weights[2]).toBeGreaterThan(weights[1]);
+    expect(benchOf(program).repsMin).toBe(6);
+    expect(benchOf(program).repsMax).toBe(12);
+  });
+
+  it('leaves a genuinely bodyweight exercise (no weight ever logged) on rep-based progression', () => {
+    let program = generateInitialProgram(profile, exercises);
+    // 'crunch' is logged without any weight, week after week.
+    program = advanceWeek(program, profile, simulateSuccessfulWeek(program, { bench: 40 })).program;
+
+    const crunch = program.days[0].exercises.find((e) => e.exerciseId === 'crunch')!;
+    expect(crunch.targetWeightKg).toBeNull();
+    // Rep-based progression still applies to it.
+    expect(crunch.repsMax).toBeGreaterThan(12);
+  });
+});
+
+describe('advanceWeek — deload is temporary (regression)', () => {
+  it('dips sets and weight on a deload week and restores them the next week, across two deload cycles', () => {
+    let program = generateInitialProgram(profile, exercises);
+    program = advanceWeek(program, profile, simulateSuccessfulWeek(program, { bench: 40 })).program;
+    expect(program.currentWeek).toBe(2);
+
+    const workingSets = benchOf(program).sets;
+    expect(workingSets).toBeGreaterThan(1);
+
+    // Deload prescriptions are produced by the advanceWeek run whose currentWeek is a multiple of
+    // DELOAD_INTERVAL_WEEKS (6), i.e. the runs at week 6 and week 12.
+    for (const deloadAtWeek of [6, 12]) {
+      // Train normally up to (and including) the week before the deload run.
+      while (program.currentWeek < deloadAtWeek) {
+        program = advanceWeek(program, profile, simulateSuccessfulWeek(program, {})).program;
+      }
+
+      const beforeSets = benchOf(program).sets;
+      const beforeWeight = benchOf(program).targetWeightKg!;
+      expect(beforeSets).toBe(workingSets);
+
+      // The deload run itself.
+      program = advanceWeek(program, profile, simulateSuccessfulWeek(program, {})).program;
+      const deloadedSets = benchOf(program).sets;
+      const deloadedWeight = benchOf(program).targetWeightKg!;
+      expect(deloadedSets).toBeLessThan(beforeSets);
+      expect(deloadedWeight).toBeLessThan(beforeWeight);
+      expect(program.progressByExercise['bench'].preDeloadSets).toBe(beforeSets);
+      expect(program.progressByExercise['bench'].preDeloadWeightKg).toBe(beforeWeight);
+
+      // The week right after the deload must restore the pre-deload baseline (and then progress
+      // from it), not keep the reduced values and certainly not reduce them again.
+      program = advanceWeek(program, profile, simulateSuccessfulWeek(program, {})).program;
+      expect(benchOf(program).sets).toBe(beforeSets);
+      expect(benchOf(program).targetWeightKg!).toBeGreaterThanOrEqual(beforeWeight);
+      expect(program.progressByExercise['bench'].preDeloadSets).toBeNull();
+      expect(program.progressByExercise['bench'].preDeloadWeightKg).toBeNull();
+    }
+
+    // After two full deload cycles the working set count is exactly where it started — no one-way
+    // ratchet down (the bug: 4 -> 2 -> 1).
+    expect(benchOf(program).sets).toBe(workingSets);
   });
 });

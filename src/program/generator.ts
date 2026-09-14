@@ -1,7 +1,16 @@
-import type { Exercise, ExerciseProgress, Experience, Profile, Program, ProgramDay, ProgramExercise, WorkoutLog } from '../types';
+import type { Exercise, ExerciseProgress, Experience, Profile, Program, ProgramDay, ProgramExercise, SetLogEntry, WorkoutLog } from '../types';
 import { pickSplit, dayTemplatesForSplit, MUSCLE_GROUPS_BY_TEMPLATE } from './splitPicker';
 import { pickExercisesForDay } from './exercisePicker';
-import { applyProgression, estimateOneRepMax, isDeloadWeek, maybeLevelUp } from './progression';
+import { applyProgression, estimateOneRepMax, isDeloadWeek, maybeLevelUp, roundToPlate } from './progression';
+
+// The heaviest weight the user actually moved on a completed set, or null if they logged no weight
+// at all (i.e. they are doing this as a pure bodyweight exercise). Weights of 0 count as "no weight".
+function heaviestLoggedWeightKg(sets: SetLogEntry[]): number | null {
+  const weights = sets
+    .filter((s) => s.done && s.actual.weightKg !== null && s.actual.weightKg > 0)
+    .map((s) => s.actual.weightKg as number);
+  return weights.length > 0 ? Math.max(...weights) : null;
+}
 
 export function generateInitialProgram(profile: Profile, exercises: Exercise[]): Program {
   const split = pickSplit(profile.daysPerWeek);
@@ -26,7 +35,10 @@ export function generateInitialProgram(profile: Profile, exercises: Exercise[]):
   const progressByExercise: Record<string, ExerciseProgress> = {};
   for (const day of days) {
     for (const ex of day.exercises) {
-      progressByExercise[ex.exerciseId] = { phase: 'linear', consecutiveFailures: 0, weeksWithoutIncrease: 0 };
+      progressByExercise[ex.exerciseId] = {
+        phase: 'linear', consecutiveFailures: 0, weeksWithoutIncrease: 0,
+        preDeloadSets: null, preDeloadWeightKg: null,
+      };
     }
   }
 
@@ -81,16 +93,36 @@ export function advanceWeek(
     const lastWeekSets = setsByExerciseId.get(exerciseId);
     if (!lastWeekSets || lastWeekSets.length === 0) continue; // not trained last week (e.g. was swapped) — leave untouched
 
-    const progress = progressByExercise[exerciseId] ?? { phase: 'linear' as const, consecutiveFailures: 0, weeksWithoutIncrease: 0 };
+    const progress = progressByExercise[exerciseId] ?? {
+      phase: 'linear' as const, consecutiveFailures: 0, weeksWithoutIncrease: 0,
+      preDeloadSets: null, preDeloadWeightKg: null,
+    };
+
+    // Establish a real working weight the first time the user logs one. pickExercisesForDay can
+    // only ever emit targetWeightKg: null (it has no idea how strong the user is), and every
+    // weight-based branch of applyProgression is gated on a non-null weight — so without this
+    // seeding step the app would ratchet reps upward forever and never progress load at all.
+    // Exercises the user genuinely performs at bodyweight log no weight, stay null here, and
+    // keep using the rep-based branch, which is correct for them.
+    let exerciseForProgression = exercise;
+    if (exercise.targetWeightKg === null) {
+      const seedWeightKg = heaviestLoggedWeightKg(lastWeekSets);
+      if (seedWeightKg !== null) {
+        exerciseForProgression = { ...exercise, targetWeightKg: roundToPlate(seedWeightKg) };
+      }
+    }
 
     const result = applyProgression(
-      exercise, lastWeekSets, progress.phase, progress.consecutiveFailures, progress.weeksWithoutIncrease, program.currentWeek,
+      exerciseForProgression, lastWeekSets, progress.phase, progress.consecutiveFailures, progress.weeksWithoutIncrease, program.currentWeek,
+      progress.preDeloadSets ?? null, progress.preDeloadWeightKg ?? null,
     );
 
     progressByExercise[exerciseId] = {
       phase: result.phase,
       consecutiveFailures: result.consecutiveFailures,
       weeksWithoutIncrease: result.weeksWithoutIncrease,
+      preDeloadSets: result.preDeloadSets,
+      preDeloadWeightKg: result.preDeloadWeightKg,
     };
     // A routine scheduled recovery week (isDeloadWeek) also resets consecutiveFailures to 0,
     // but that is not a failure-triggered deload — only count it when it wasn't scheduled.
