@@ -2,6 +2,8 @@ import { changeCredentials } from '../auth';
 import { getState, updateState } from '../state';
 import { exportAllAsJson, importAllFromJson } from '../exportImport';
 
+let pendingImportStatus: { text: string; color: string } | null = null;
+
 export function renderSettings(container: HTMLElement): void {
   const units = getState().settings.units;
 
@@ -44,6 +46,13 @@ export function renderSettings(container: HTMLElement): void {
     </section>
   `;
 
+  if (pendingImportStatus) {
+    const statusEl = container.querySelector<HTMLParagraphElement>('#import-status')!;
+    statusEl.textContent = pendingImportStatus.text;
+    statusEl.style.color = pendingImportStatus.color;
+    pendingImportStatus = null;
+  }
+
   container.querySelector('#credentials-form')!.addEventListener('submit', async (event) => {
     event.preventDefault();
     const login = (container.querySelector('#new-login') as HTMLInputElement).value;
@@ -69,14 +78,21 @@ export function renderSettings(container: HTMLElement): void {
 
   container.querySelector('#import-file')!.addEventListener('change', async (event) => {
     const file = (event.target as HTMLInputElement).files?.[0];
-    const statusEl = container.querySelector<HTMLParagraphElement>('#import-status')!;
     if (!file) return;
 
     if (!window.confirm('Импорт полностью заменит текущие данные приложения. Продолжить?')) return;
 
     const text = await file.text();
     const result = importAllFromJson(text);
-    statusEl.textContent = result.ok ? 'Данные успешно импортированы' : `Ошибка: ${result.error}`;
-    statusEl.style.color = result.ok ? 'green' : 'var(--danger)';
+    if (result.ok) {
+      // updateState already ran inside importAllFromJson, triggering a re-render.
+      // Set the pending message so the NEXT render of this screen displays it.
+      pendingImportStatus = { text: 'Данные успешно импортированы', color: 'green' };
+    } else {
+      // No updateState was called, no re-render triggered — safe to update the DOM directly.
+      const statusEl = container.querySelector<HTMLParagraphElement>('#import-status')!;
+      statusEl.textContent = `Ошибка: ${result.error}`;
+      statusEl.style.color = 'var(--danger)';
+    }
   });
 }
