@@ -20,7 +20,13 @@ export function pickExercisesForDay(exercises: Exercise[], opts: PickOptions): P
   const restSec = REST_SEC_BY_GOAL[opts.goal];
   const isolationSlotsPerMuscle = opts.experience === 'advanced' ? 2 : 1;
 
-  const pool = filterExercises(exercises, { equipment: opts.equipment, excludeKeywords: opts.excludeKeywords });
+  // maxLevel keeps a beginner out of advanced-level exercises: they see beginner movements only,
+  // an intermediate sees beginner + intermediate, an advanced user sees everything.
+  const pool = filterExercises(exercises, {
+    equipment: opts.equipment,
+    excludeKeywords: opts.excludeKeywords,
+    maxLevel: opts.experience,
+  });
 
   // Build a priority-ordered candidate list: pass 1 = one compound per muscle,
   // pass 2 = a second compound if available, then isolation slots. This keeps

@@ -64,6 +64,28 @@ describe('pickExercisesForDay', () => {
     expect(bench!.sets).toBeGreaterThan(flye!.sets);
   });
 
+  it('never assigns a beginner an exercise above their level', () => {
+    const mixedPool: Exercise[] = [
+      makeExercise({ id: 'adv-bench', muscleGroup: 'chest', mechanic: 'compound', level: 'advanced' }),
+      makeExercise({ id: 'beg-bench', muscleGroup: 'chest', mechanic: 'compound', level: 'beginner' }),
+      makeExercise({ id: 'int-flye', muscleGroup: 'chest', mechanic: 'isolation', level: 'intermediate' }),
+      makeExercise({ id: 'beg-flye', muscleGroup: 'chest', mechanic: 'isolation', level: 'beginner' }),
+    ];
+
+    const beginnerResult = pickExercisesForDay(mixedPool, {
+      targetMuscles: ['chest'], equipment: 'full_gym', timeBudgetMin: 120, goal: 'mass', experience: 'beginner',
+    });
+    const beginnerLevels = beginnerResult.map((r) => mixedPool.find((e) => e.id === r.exerciseId)!.level);
+    expect(beginnerLevels.every((l) => l === 'beginner')).toBe(true);
+    // Level filtering must not starve the day — the beginner-level alternatives are still picked.
+    expect(beginnerResult.map((r) => r.exerciseId).sort()).toEqual(['beg-bench', 'beg-flye']);
+
+    const advancedResult = pickExercisesForDay(mixedPool, {
+      targetMuscles: ['chest'], equipment: 'full_gym', timeBudgetMin: 120, goal: 'mass', experience: 'advanced',
+    });
+    expect(advancedResult.map((r) => r.exerciseId)).toContain('adv-bench');
+  });
+
   it('never picks the same exercise twice in one day', () => {
     const result = pickExercisesForDay(pool, {
       targetMuscles: ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'],
