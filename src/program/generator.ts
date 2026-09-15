@@ -29,6 +29,7 @@ export function generateInitialProgram(profile: Profile, exercises: Exercise[]):
       goal: profile.goal,
       experience: profile.experience,
       excludeKeywords,
+      dayIndex,
     }),
   }));
 

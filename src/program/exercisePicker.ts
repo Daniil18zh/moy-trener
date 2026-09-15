@@ -9,6 +9,7 @@ export interface PickOptions {
   goal: Goal;
   experience: Experience;
   excludeKeywords?: string[];
+  dayIndex?: number;
 }
 
 function exerciseTimeMin(sets: number, restSec: number): number {
@@ -19,6 +20,7 @@ export function pickExercisesForDay(exercises: Exercise[], opts: PickOptions): P
   const scheme = REP_SCHEME_BY_GOAL[opts.goal];
   const restSec = REST_SEC_BY_GOAL[opts.goal];
   const isolationSlotsPerMuscle = opts.experience === 'advanced' ? 2 : 1;
+  const dayIndex = opts.dayIndex ?? 0;
 
   // maxLevel keeps a beginner out of advanced-level exercises: they see beginner movements only,
   // an intermediate sees beginner + intermediate, an advanced user sees everything.
@@ -35,9 +37,17 @@ export function pickExercisesForDay(exercises: Exercise[], opts: PickOptions): P
   const usedIds = new Set<string>();
 
   function takeOne(muscle: MuscleGroup, mechanic: 'compound' | 'isolation'): Exercise | null {
-    const found = pool.find((e) => e.muscleGroup === muscle && e.mechanic === mechanic && !usedIds.has(e.id));
-    if (found) usedIds.add(found.id);
-    return found ?? null;
+    const candidatesForSlot = pool.filter(
+      (e) => e.muscleGroup === muscle && e.mechanic === mechanic && !usedIds.has(e.id),
+    );
+    if (candidatesForSlot.length === 0) return null;
+    // Rotate deterministically by day so different days of the same split (which share a
+    // template and therefore identical targetMuscles) get different exercises when the dataset
+    // offers real alternatives for a slot, while a single-candidate slot always resolves to that
+    // one candidate (dayIndex % 1 === 0 for every dayIndex).
+    const found = candidatesForSlot[dayIndex % candidatesForSlot.length];
+    usedIds.add(found.id);
+    return found;
   }
 
   for (const muscle of opts.targetMuscles) {

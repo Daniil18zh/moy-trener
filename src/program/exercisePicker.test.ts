@@ -97,4 +97,45 @@ describe('pickExercisesForDay', () => {
     const ids = result.map((r) => r.exerciseId);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('rotates between candidates by dayIndex when the dataset offers real alternatives', () => {
+    const variedPool: Exercise[] = [
+      makeExercise({ id: 'bench', muscleGroup: 'chest', mechanic: 'compound' }),
+      makeExercise({ id: 'incline-press', muscleGroup: 'chest', mechanic: 'compound' }),
+      makeExercise({ id: 'flye', muscleGroup: 'chest', mechanic: 'isolation' }),
+      makeExercise({ id: 'cable-crossover', muscleGroup: 'chest', mechanic: 'isolation' }),
+    ];
+
+    const pickedChestCompoundIds = [0, 1, 2].map((dayIndex) => {
+      const result = pickExercisesForDay(variedPool, {
+        targetMuscles: ['chest'],
+        equipment: 'full_gym',
+        timeBudgetMin: 120,
+        goal: 'mass',
+        experience: 'beginner',
+        dayIndex,
+      });
+      return result.find((r) => r.exerciseId === 'bench' || r.exerciseId === 'incline-press')!.exerciseId;
+    });
+
+    expect(new Set(pickedChestCompoundIds).size).toBeGreaterThan(1);
+  });
+
+  it('always picks the same exercise regardless of dayIndex when only one candidate matches a slot', () => {
+    const singleCandidatePool: Exercise[] = [
+      makeExercise({ id: 'bench', muscleGroup: 'chest', mechanic: 'compound' }),
+    ];
+
+    for (const dayIndex of [0, 1, 2, 5, 100]) {
+      const result = pickExercisesForDay(singleCandidatePool, {
+        targetMuscles: ['chest'],
+        equipment: 'full_gym',
+        timeBudgetMin: 120,
+        goal: 'mass',
+        experience: 'beginner',
+        dayIndex,
+      });
+      expect(result.map((r) => r.exerciseId)).toEqual(['bench']);
+    }
+  });
 });
