@@ -6,7 +6,7 @@ function makeExercise(overrides: Partial<Exercise>): Exercise {
   return {
     id: 'x', nameRu: 'X', nameEn: 'X', muscleGroup: 'chest', secondaryMuscleGroups: [],
     equipmentTiers: ['full_gym'], mechanic: 'compound', level: 'beginner',
-    instructions: [], images: [], ...overrides,
+    instructions: [], diagramPath: '/exercises/x.svg', ...overrides,
   };
 }
 

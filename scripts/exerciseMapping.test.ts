@@ -45,9 +45,12 @@ describe('exerciseMapping', () => {
       secondaryMuscles: [],
       instructions: ['Lie down.', 'Sit up.'],
       category: 'strength',
-      images: ['3_4_Sit-Up/0.jpg', '3_4_Sit-Up/1.jpg'],
     };
-    const result = normalizeExercise(raw, { '3_4_Sit-Up': 'Скручивания на 3/4' });
+    const result = normalizeExercise(
+      raw,
+      { '3_4_Sit-Up': 'Скручивания на 3/4' },
+      { '3_4_Sit-Up': 'Лягте и поднимитесь.' },
+    );
     expect(result).toEqual({
       id: '3_4_Sit-Up',
       nameRu: 'Скручивания на 3/4',
@@ -58,27 +61,42 @@ describe('exerciseMapping', () => {
       mechanic: 'isolation',
       level: 'beginner',
       instructions: ['Lie down.', 'Sit up.'],
-      images: ['3_4_Sit-Up/0.jpg', '3_4_Sit-Up/1.jpg'],
+      instructionsRu: 'Лягте и поднимитесь.',
+      diagramPath: '/exercises/3_4_Sit-Up.svg',
     });
+  });
+
+  it('omits instructionsRu entirely when no curated Russian cue exists', () => {
+    const raw = {
+      id: 'Some_Exercise', name: 'Some Exercise', force: null, level: 'beginner' as const,
+      mechanic: 'compound', equipment: 'barbell', primaryMuscles: ['chest'], secondaryMuscles: ['triceps'],
+      instructions: ['Do it.'], category: 'strength',
+    };
+    const result = normalizeExercise(raw, {}, { Other_Exercise: 'Не про это упражнение.' });
+    expect(result?.instructionsRu).toBeUndefined();
+    expect(Object.hasOwn(result!, 'instructionsRu')).toBe(false);
+    // The diagram path is derived from the id, never from the (now removed) upstream image list.
+    expect(result?.diagramPath).toBe('/exercises/Some_Exercise.svg');
+    expect(result?.secondaryMuscleGroups).toEqual(['arms']);
   });
 
   it('falls back to the English name when no translation exists', () => {
     const raw = {
       id: 'Some_Exercise', name: 'Some Exercise', force: null, level: 'beginner' as const,
       mechanic: 'compound', equipment: 'barbell', primaryMuscles: ['chest'], secondaryMuscles: [],
-      instructions: ['Do it.'], category: 'strength', images: [],
+      instructions: ['Do it.'], category: 'strength',
     };
     expect(normalizeExercise(raw, {})?.nameRu).toBe('Some Exercise');
   });
 
   it('returns null for unusable categories or unmappable primary muscle', () => {
-    const cardio = { id: 'x', name: 'X', force: null, level: 'beginner' as const, mechanic: null, equipment: 'body only', primaryMuscles: ['abdominals'], secondaryMuscles: [], instructions: [], category: 'cardio', images: [] };
+    const cardio = { id: 'x', name: 'X', force: null, level: 'beginner' as const, mechanic: null, equipment: 'body only', primaryMuscles: ['abdominals'], secondaryMuscles: [], instructions: [], category: 'cardio' };
     expect(normalizeExercise(cardio, {})).toBeNull();
 
-    const neck = { id: 'y', name: 'Y', force: null, level: 'beginner' as const, mechanic: null, equipment: 'body only', primaryMuscles: ['neck'], secondaryMuscles: [], instructions: [], category: 'strength', images: [] };
+    const neck = { id: 'y', name: 'Y', force: null, level: 'beginner' as const, mechanic: null, equipment: 'body only', primaryMuscles: ['neck'], secondaryMuscles: [], instructions: [], category: 'strength' };
     expect(normalizeExercise(neck, {})).toBeNull();
 
-    const noEquipmentTier = { id: 'z', name: 'Z', force: null, level: 'beginner' as const, mechanic: null, equipment: 'other', primaryMuscles: ['chest'], secondaryMuscles: [], instructions: [], category: 'strength', images: [] };
+    const noEquipmentTier = { id: 'z', name: 'Z', force: null, level: 'beginner' as const, mechanic: null, equipment: 'other', primaryMuscles: ['chest'], secondaryMuscles: [], instructions: [], category: 'strength' };
     expect(normalizeExercise(noEquipmentTier, {})).toBeNull();
   });
 });

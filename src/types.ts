@@ -34,8 +34,16 @@ export interface Exercise {
   equipmentTiers: Equipment[]; // which of our 3 tiers can perform it
   mechanic: 'compound' | 'isolation';
   level: Experience;
+  // English, from the source dataset. Never rendered — it is kept only because the injury filter
+  // (src/exercises/filter.ts) matches English anatomy keywords against it. User-facing technique
+  // text is instructionsRu.
   instructions: string[];
-  images: string[]; // paths under /exercises/<id>/N.jpg
+  // Short curated Russian technique cue, from scripts/ru-instructions.json. Undefined for the
+  // (many) exercises with no curated entry; the UI then shows no instruction block at all rather
+  // than falling back to English.
+  instructionsRu?: string;
+  // Path to this exercise's generated muscle diagram, e.g. "/exercises/Barbell_Squat.svg".
+  diagramPath: string;
 }
 
 export interface ProgramExercise {

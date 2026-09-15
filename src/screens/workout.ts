@@ -30,9 +30,9 @@ let sessionRestCountdown: Countdown | null = null;
 // takes (e.g. through loadExercises().then(...)).
 let pendingSummary: { durationMin: number; totalTonnageKg: number } | null = null;
 
-// Exercise names and instructions come from the bundled data file rather than from the user, but
-// they are free text containing quotes and punctuation and they land in both attribute and element
-// positions — escape them so a stray character can't break the surrounding markup.
+// Exercise names and Russian technique cues come from the bundled data file rather than from the
+// user, but they are free text containing quotes and punctuation and they land in both attribute
+// and element positions — escape them so a stray character can't break the surrounding markup.
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -42,8 +42,8 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// Static assets (the exercise images) live under Vite's configured base, which is "/" in dev but
-// "/<repo>/" on GitHub Pages — a hardcoded root-absolute path would 404 there.
+// Static assets (the generated muscle diagrams) live under Vite's configured base, which is "/" in
+// dev but "/<repo>/" on GitHub Pages — a hardcoded root-absolute path would 404 there.
 function assetUrl(path: string): string {
   return `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
 }
@@ -130,21 +130,23 @@ export function renderWorkout(container: HTMLElement): void {
       const wrapper = document.createElement('section');
       wrapper.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px;';
       const exerciseName = escapeHtml(exercise?.nameRu ?? ex.exerciseId);
-      const imageUrl = exercise?.images[0]
-        ? assetUrl(`exercises/${exercise.id}/${exercise.images[0].split('/').pop()}`)
-        : null;
-      // Spec §10: every exercise on the workout screen shows both an image and an instruction.
-      const instructions = exercise?.instructions?.length ? escapeHtml(exercise.instructions.join(' ')) : '';
+      // Spec §10: every exercise on the workout screen shows an illustration. It is now a
+      // build-time-generated muscle diagram (public/exercises/<id>.svg) rather than a photo.
+      const diagramUrl = exercise?.diagramPath ? assetUrl(exercise.diagramPath) : null;
+      // Russian only, and only when a curated cue exists — the dataset's English `instructions`
+      // are never shown to the user, and an exercise without a cue gets no toggle rather than an
+      // empty one.
+      const instructionsRu = exercise?.instructionsRu ? escapeHtml(exercise.instructionsRu) : '';
 
       wrapper.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start;">
           <h3 style="margin: 0;">${exerciseName}</h3>
           <button class="replace-btn secondary" style="font-size: 0.8rem; padding: 4px 8px; min-height: 44px; min-width: 44px;">Заменить</button>
         </div>
-        ${imageUrl ? `<img src="${imageUrl}" alt="${exerciseName}" style="max-width: 100%; border-radius: 8px;" />` : ''}
+        ${diagramUrl ? `<img class="exercise-diagram" src="${diagramUrl}" alt="Мышцы, которые работают в упражнении «${exerciseName}»" style="display: block; max-width: 240px; width: 100%; margin: 8px auto; border-radius: 8px;" />` : ''}
         <p>${ex.sets} × ${ex.repsMin}-${ex.repsMax} ${ex.targetWeightKg !== null ? `@ ${ex.targetWeightKg} кг` : '(вес тела)'}</p>
         ${ex.lastChangeReason ? `<p class="exercise-change-reason">${escapeHtml(ex.lastChangeReason)}</p>` : ''}
-        ${instructions ? `<p class="exercise-instructions">${instructions}</p>` : ''}
+        ${instructionsRu ? `<details class="exercise-instructions"><summary style="cursor: pointer; min-height: 44px; line-height: 44px;">Инструкция</summary><p>${instructionsRu}</p></details>` : ''}
         <div class="set-rows"></div>
       `;
 

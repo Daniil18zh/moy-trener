@@ -11,7 +11,6 @@ export interface RawExercise {
   secondaryMuscles: string[];
   instructions: string[];
   category: string;
-  images: string[];
 }
 
 const MUSCLE_MAP: Record<string, MuscleGroup | null> = {
@@ -64,7 +63,11 @@ function mapLevel(raw: string): Experience {
   return VALID_LEVELS.has(raw) ? (raw as Experience) : 'beginner';
 }
 
-export function normalizeExercise(raw: RawExercise, ruDict: Record<string, string>): Exercise | null {
+export function normalizeExercise(
+  raw: RawExercise,
+  ruDict: Record<string, string>,
+  ruInstructions: Record<string, string> = {},
+): Exercise | null {
   if (!isUsableCategory(raw.category)) return null;
 
   const muscleGroup = mapMuscleGroup(raw.primaryMuscles[0] ?? '');
@@ -87,6 +90,10 @@ export function normalizeExercise(raw: RawExercise, ruDict: Record<string, strin
     mechanic: mapMechanic(raw.mechanic),
     level: mapLevel(raw.level),
     instructions: raw.instructions,
-    images: raw.images,
+    // Omit the key entirely (rather than setting it to undefined) when there is no curated cue, so
+    // the serialized exercises.json stays free of dangling nulls and the UI's `if (instructionsRu)`
+    // check is the only thing standing between the user and an empty toggle.
+    ...(ruInstructions[raw.id] ? { instructionsRu: ruInstructions[raw.id] } : {}),
+    diagramPath: `/exercises/${raw.id}.svg`,
   };
 }
