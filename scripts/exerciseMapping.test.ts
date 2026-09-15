@@ -62,7 +62,6 @@ describe('exerciseMapping', () => {
       level: 'beginner',
       instructions: ['Lie down.', 'Sit up.'],
       instructionsRu: 'Лягте и поднимитесь.',
-      diagramPath: '/exercises/3_4_Sit-Up.svg',
     });
   });
 
@@ -75,8 +74,10 @@ describe('exerciseMapping', () => {
     const result = normalizeExercise(raw, {}, { Other_Exercise: 'Не про это упражнение.' });
     expect(result?.instructionsRu).toBeUndefined();
     expect(Object.hasOwn(result!, 'instructionsRu')).toBe(false);
-    // The diagram path is derived from the id, never from the (now removed) upstream image list.
-    expect(result?.diagramPath).toBe('/exercises/Some_Exercise.svg');
+    // No image/diagram field survives normalization: the workout screen draws the diagram from
+    // muscleGroup/secondaryMuscleGroups at render time.
+    expect(result).not.toHaveProperty('images');
+    expect(result).not.toHaveProperty('diagramPath');
     expect(result?.secondaryMuscleGroups).toEqual(['arms']);
   });
 

@@ -1,6 +1,7 @@
 import type { Exercise, SetLogEntry, WorkoutLog } from '../types';
 import { getState, updateState } from '../state';
 import { loadExercises } from '../exercises/loader';
+import { renderMuscleDiagram } from '../exercises/muscleDiagram';
 import { advanceWeek } from '../program/generator';
 import { createCountdown, playBeep, type Countdown } from '../timer';
 
@@ -40,12 +41,6 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-// Static assets (the generated muscle diagrams) live under Vite's configured base, which is "/" in
-// dev but "/<repo>/" on GitHub Pages — a hardcoded root-absolute path would 404 there.
-function assetUrl(path: string): string {
-  return `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
 }
 
 function renderSummary(container: HTMLElement, summary: { durationMin: number; totalTonnageKg: number }): void {
@@ -130,9 +125,14 @@ export function renderWorkout(container: HTMLElement): void {
       const wrapper = document.createElement('section');
       wrapper.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px;';
       const exerciseName = escapeHtml(exercise?.nameRu ?? ex.exerciseId);
-      // Spec §10: every exercise on the workout screen shows an illustration. It is now a
-      // build-time-generated muscle diagram (public/exercises/<id>.svg) rather than a photo.
-      const diagramUrl = exercise?.diagramPath ? assetUrl(exercise.diagramPath) : null;
+      // Spec §10: every exercise on the workout screen shows an illustration. It is a muscle
+      // diagram rendered right here from the exercise's own muscle groups — no asset request, and
+      // no 598 near-identical SVG files in the repo (there are only 65 distinct diagrams). The
+      // markup is built entirely by renderMuscleDiagram from a closed set of constants and
+      // numbers, with no exercise-supplied text in it, so it is safe to inject as-is.
+      const diagramSvg = exercise
+        ? renderMuscleDiagram(exercise.muscleGroup, exercise.secondaryMuscleGroups)
+        : '';
       // Russian only, and only when a curated cue exists — the dataset's English `instructions`
       // are never shown to the user, and an exercise without a cue gets no toggle rather than an
       // empty one.
@@ -143,7 +143,7 @@ export function renderWorkout(container: HTMLElement): void {
           <h3 style="margin: 0;">${exerciseName}</h3>
           <button class="replace-btn secondary" style="font-size: 0.8rem; padding: 4px 8px; min-height: 44px; min-width: 44px;">Заменить</button>
         </div>
-        ${diagramUrl ? `<img class="exercise-diagram" src="${diagramUrl}" alt="Мышцы, которые работают в упражнении «${exerciseName}»" style="display: block; max-width: 240px; width: 100%; margin: 8px auto; border-radius: 8px;" />` : ''}
+        ${diagramSvg ? `<div class="exercise-diagram" style="max-width: 240px; margin: 8px auto;">${diagramSvg}</div>` : ''}
         <p>${ex.sets} × ${ex.repsMin}-${ex.repsMax} ${ex.targetWeightKg !== null ? `@ ${ex.targetWeightKg} кг` : '(вес тела)'}</p>
         ${ex.lastChangeReason ? `<p class="exercise-change-reason">${escapeHtml(ex.lastChangeReason)}</p>` : ''}
         ${instructionsRu ? `<details class="exercise-instructions"><summary style="cursor: pointer; min-height: 44px; line-height: 44px;">Инструкция</summary><p>${instructionsRu}</p></details>` : ''}

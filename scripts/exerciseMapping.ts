@@ -94,6 +94,5 @@ export function normalizeExercise(
     // the serialized exercises.json stays free of dangling nulls and the UI's `if (instructionsRu)`
     // check is the only thing standing between the user and an empty toggle.
     ...(ruInstructions[raw.id] ? { instructionsRu: ruInstructions[raw.id] } : {}),
-    diagramPath: `/exercises/${raw.id}.svg`,
   };
 }

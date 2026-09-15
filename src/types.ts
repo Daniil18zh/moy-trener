@@ -42,8 +42,8 @@ export interface Exercise {
   // (many) exercises with no curated entry; the UI then shows no instruction block at all rather
   // than falling back to English.
   instructionsRu?: string;
-  // Path to this exercise's generated muscle diagram, e.g. "/exercises/Barbell_Squat.svg".
-  diagramPath: string;
+  // No image field: the workout screen renders the muscle diagram at runtime from muscleGroup and
+  // secondaryMuscleGroups above (src/exercises/muscleDiagram.ts), so there is nothing to store.
 }
 
 export interface ProgramExercise {

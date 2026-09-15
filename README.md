@@ -8,7 +8,7 @@
 
 ```bash
 npm install
-npm run build:exercises  # один раз — вендорит базу упражнений
+npm run build:exercises  # один раз — скачивает метаданные упражнений в public/data/exercises.json
 npm run dev
 ```
 
