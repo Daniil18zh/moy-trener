@@ -3,12 +3,13 @@ import type { MuscleGroup } from '../types';
 // ---------------------------------------------------------------------------
 // Original, hand-authored schematic body diagram.
 //
-// This lives under src/ (not scripts/) because both the browser bundle and the
-// build script render from it. The diagram is a pure function of
-// (muscleGroup, secondaryMuscleGroups) — there are only 65 distinct outputs
-// across the whole 598-exercise catalogue — so writing one SVG file per
-// exercise meant shipping ~4.4MB of byte-identical duplicates. The workout
-// screen calls this directly instead, and nothing is generated to disk at all.
+// This lives under src/ (not scripts/) because the browser bundle renders from
+// it: the workout screen calls renderMuscleDiagram() and inlines the result.
+// The diagram is a pure function of (muscleGroup, secondaryMuscleGroups), and
+// the whole 598-exercise catalogue collapses to a few dozen distinct outputs —
+// so writing one SVG file per exercise meant shipping ~4.4MB of byte-identical
+// duplicates. Nothing is generated to disk at all now; the build script only
+// emits exercises.json and does not import this module.
 //
 // Every coordinate below was written by hand for this app: no shape, path, or
 // coordinate set is copied from, traced over, or extracted from any third-party
@@ -241,14 +242,29 @@ export const MUSCLE_NAMES_RU: Record<MuscleGroup, string> = {
 };
 
 /**
+ * The secondary groups that actually get painted blue: de-duplicated, and with
+ * the primary group removed because primary always wins the fill. The upstream
+ * dataset routinely repeats groups and re-lists the primary group as secondary
+ * — 74 of the 598 exercises have a secondary array containing nothing but the
+ * primary group again (e.g. Barbell_Curl: primary `arms`, secondary
+ * `["arms"]`). For those the diagram has no blue region at all, so both the
+ * legend and the accessible label have to key off this list rather than the
+ * raw array, or they end up explaining a colour that is not on the figure.
+ */
+export function effectiveSecondaryMuscles(
+  primaryMuscle: MuscleGroup,
+  secondaryMuscles: MuscleGroup[],
+): MuscleGroup[] {
+  return [...new Set(secondaryMuscles)].filter((m) => m !== primaryMuscle);
+}
+
+/**
  * The text a screen reader announces in place of the diagram. Without this the
  * figure is just an unlabelled picture — the colours carry the entire message,
  * so the same information has to exist in words.
  */
 export function muscleDiagramLabel(primaryMuscle: MuscleGroup, secondaryMuscles: MuscleGroup[]): string {
-  // De-duplicated, and with the primary group removed: the upstream dataset
-  // routinely repeats groups and lists the primary group again as secondary.
-  const secondary = [...new Set(secondaryMuscles)].filter((m) => m !== primaryMuscle);
+  const secondary = effectiveSecondaryMuscles(primaryMuscle, secondaryMuscles);
   const primaryPart = `Основные мышцы: ${MUSCLE_NAMES_RU[primaryMuscle]}`;
   if (secondary.length === 0) return `${primaryPart}.`;
   return `${primaryPart}. Второстепенные: ${secondary.map((m) => MUSCLE_NAMES_RU[m]).join(', ')}.`;
@@ -260,13 +276,15 @@ export function muscleDiagramLabel(primaryMuscle: MuscleGroup, secondaryMuscles:
  * `secondaryMuscles` in blue, and everything else in neutral grey.
  */
 export function renderMuscleDiagram(primaryMuscle: MuscleGroup, secondaryMuscles: MuscleGroup[]): string {
-  const secondary = new Set(secondaryMuscles);
+  const effectiveSecondary = effectiveSecondaryMuscles(primaryMuscle, secondaryMuscles);
+  const secondary = new Set(effectiveSecondary);
   const label = muscleDiagramLabel(primaryMuscle, secondaryMuscles);
   const legendLines = [
     `<circle cx="14" cy="216" r="4.5" fill="${PRIMARY_COLOR}" />`,
     `<text x="24" y="219.5" font-size="9.5" fill="#3f3f46">Основные мышцы</text>`,
   ];
-  if (secondaryMuscles.length > 0) {
+  // Only when something on the figure is actually blue — see effectiveSecondaryMuscles().
+  if (effectiveSecondary.length > 0) {
     legendLines.push(
       `<circle cx="14" cy="230" r="4.5" fill="${SECONDARY_COLOR}" />`,
       `<text x="24" y="233.5" font-size="9.5" fill="#3f3f46">Второстепенные мышцы</text>`,

@@ -93,6 +93,16 @@ describe('renderMuscleDiagram', () => {
     expect(noSecondary).not.toContain('Второстепенные мышцы');
   });
 
+  it('hides the secondary legend when the secondary list only repeats the primary muscle', () => {
+    // Regression: the upstream dataset routinely re-lists the primary muscle as its own
+    // secondary (e.g. Barbell_Curl: primary "arms", secondary ["arms"]). No region is
+    // actually painted blue in that case, so the legend must not claim one is.
+    const svg = renderMuscleDiagram('arms', ['arms']);
+    expect(fillsFor(svg, 'arms')).toEqual([PRIMARY_COLOR]);
+    expect(svg).toContain('Основные мышцы');
+    expect(svg).not.toContain('Второстепенные мышцы');
+  });
+
   it('shows both a front and a back view', () => {
     const svg = renderMuscleDiagram('back', []);
     expect(svg).toContain('Вид спереди');

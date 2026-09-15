@@ -127,9 +127,9 @@ export function renderWorkout(container: HTMLElement): void {
       const exerciseName = escapeHtml(exercise?.nameRu ?? ex.exerciseId);
       // Spec §10: every exercise on the workout screen shows an illustration. It is a muscle
       // diagram rendered right here from the exercise's own muscle groups — no asset request, and
-      // no 598 near-identical SVG files in the repo (there are only 65 distinct diagrams). The
-      // markup is built entirely by renderMuscleDiagram from a closed set of constants and
-      // numbers, with no exercise-supplied text in it, so it is safe to inject as-is.
+      // no 598 near-identical SVG files in the repo. The markup is built entirely by
+      // renderMuscleDiagram from a closed set of constants and numbers, with no exercise-supplied
+      // text in it, so it is safe to inject as-is.
       const diagramSvg = exercise
         ? renderMuscleDiagram(exercise.muscleGroup, exercise.secondaryMuscleGroups)
         : '';
